@@ -1,4 +1,7 @@
-
+// TO ADD
+// 43 '+'
+// 45 '-'
+// Deg sym (not standard! 42 * might work)
 
 void digitZero(int offset, uint32_t colour){
     stripClock.fill(colour, (0 + offset), 3*LED_SEGMENT);
