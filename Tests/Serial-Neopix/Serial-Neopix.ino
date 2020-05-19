@@ -3,7 +3,7 @@
 #include <Adafruit_NeoPixel.h>
 
 // Which pin on the Arduino is connected to the NeoPixels?
-#define LEDCLOCK_PIN        D6
+#define LEDCLOCK_PIN        6
 
 // How many NeoPixels are attached to the Arduino?
 #define LEDCLOCK_COUNT      28
@@ -46,7 +46,8 @@ void setup() {
   stripClock.clear(); 
   stripClock.show();                                  // Turn OFF all pixels ASAP
   stripClock.setBrightness(CF_Bright);                // Set inital BRIGHTNESS (max = 255)
- 
+
+
 }
 
 void loop() {
@@ -56,8 +57,9 @@ void loop() {
     incomingByte = Serial.read();
     
     // say what you got:
+    stripClock.clear(); 
     displayCharecter(incomingByte, digit[3],stripClock.Color(0,255,0));
-
+    stripClock.show();
  }
 }
 

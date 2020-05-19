@@ -27,8 +27,7 @@ A modification of DIY Machines' Giant Hidden Shelf Edge Clock
 */
 
 /*
-SPECIFIC TO DO:
- * Have a more readable char to display map. Ideal is ASCII, with case inconsistent ability
+SPECIFIC TO DO: 
  * Decimal place
  * Pulse the neopixels in the background for things like connecting to wifi etc (heartbeat stuff)
  * switch to esp and online time
@@ -38,9 +37,10 @@ SPECIFIC TO DO:
  * better colour management - inc ability to loop through colour ranges
  * Brightness management via light sensor
  * Scrolling text ability
- * Serial debug
  * Wifi interface
- * A void that handles any number w left/center/right justify
+ * PART DONE Have a more readable char to display map. Ideal is ASCII, with case inconsistent ability 
+ * PART DONE Serial debug 
+ * DONE A void that handles any number w left/center/right justify
 
  REFERENCE
  * Colours: 
@@ -115,8 +115,7 @@ void setup() {
   
   // Connect to wifi
   WiFi.begin(ssid, password);		// This occours first as it take a couple of seconds, and the other stuff isnt as important
-  // Display version number on LEDs
-  // Delay 1 sec
+  displayVersion(stripClock.Color(0,206,209),1000); 
   Serial.print("Connecting to SSID: ");
   Serial.println(ssid);
 
@@ -135,8 +134,9 @@ void setup() {
   //Connecting to wifi status/watchdog
   int WiFicounter = 0;
   int WiFicounter_max = 60;
+
   while (WiFi.status() != WL_CONNECTED) { // Wait for the Wi-Fi to connect
-    displayWifistatus(stripClock.Color(255,255,0)); // FUTURE: start yellow get more red
+    displayWifistatus(stripClock.Color(255,map(WiFicounter, 0, WiFicounter_max, 255, 0),0)); 
     Serial.print("\n Connecting to Wifi, ");
     Serial.print(WiFicounter);
     delay(1000);
@@ -149,7 +149,7 @@ void setup() {
   }
   displayWifistatus(stripClock.Color(0,255,0));
   delay(500);
-  Serial.println("Connection established!");  
+  Serial.println("\n WiFi Connection established!");  
 
   //Display IP
   Serial.print("IP address:\t");
@@ -161,15 +161,20 @@ void setup() {
   displayNTPstatus(stripClock.Color(255,255,0));  //replace 0 with yellow
   configTime(0, 0, NTP_SERVER);
   setenv("TZ", TZ_INFO, 1);  
-  if (getNTPtime(20)) {  // wait up to 10sec to sync
+  if (getNTPtime(10)) {  // wait up to 10sec to sync
      displayNTPstatus(stripClock.Color(0,255,0));  //Green
 	// delay 1s
 	// display timezone on the clock for 2sec
   } else {
      displayNTPstatus(stripClock.Color(255,0,0));  //Red
-     Serial.println("NTP Server not reachable. Restarting.");
+     Serial.println("\n NTP Server not reachable. Restarting.");
      ESP.restart();
   }
+  
+  // TESTS
+  //counttest_1(stripClock.Color(0,0,255),1000);
+  //counttest_4(stripClock.Color(255,0,0),250);
+  
 }
 
 void loop() {
@@ -177,7 +182,6 @@ void loop() {
   // Push the display values to the LEDs
   // Adjust the brightness
   // Display the LEDs
-  counttest_1(51200,1000);
   }
 
 // *** TESTING FUNCTIONS ***

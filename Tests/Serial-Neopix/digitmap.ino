@@ -1,6 +1,7 @@
 
 
 void digitZero(int offset, uint32_t colour){
+    Serial.print("\n Printing 0 ");
     stripClock.fill(colour, (0 + offset), 3*LED_SEGMENT);
     stripClock.fill(colour, (4*LED_SEGMENT + offset), 3*LED_SEGMENT);
 }
