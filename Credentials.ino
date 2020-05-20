@@ -1,3 +1,3 @@
 // Wifi Details
-const char* ssid = "RMDOMINGO";
-const char* password = "Wallpaper_1";
+const char* ssid = "";
+const char* password = "";
