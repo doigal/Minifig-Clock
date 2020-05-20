@@ -54,7 +54,9 @@ SPECIFIC TO DO:
 
 // Libary Includes
 #include <Adafruit_NeoPixel.h>
-#include <time.h>
+//#include <time.h>
+#include <ezTime.h>
+
 #ifdef ESP8266
 	#include <ESP8266WiFi.h>
 #else
@@ -66,9 +68,10 @@ SPECIFIC TO DO:
 // Version
 #define VERSION_NUM        1
 
-// NTP and Time details
-const char* NTP_SERVER = "pool.ntp.org";
-const char* TZ_INFO    = "EST-10EDT-11,M10.5.0/02:00:00,M3.5.0/03:00:00";  // enter your time zone (https://remotemonitoringsystems.ca/time-zone-abbreviations.php)
+// Time zone details
+// Provide official timezone names
+// https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
+const char* TZ_INFO    = "Australia/Melbourne";  
 
 // Which pin on the Arduino is connected to the NeoPixels?
 #define LEDCLOCK_PIN        D2
@@ -92,12 +95,6 @@ const int DL_Bright_max = 200;
 int CF_Bright = 50;
 int DL_Bright = 200;
 
-// Time Variables
-tm timeinfo;
-time_t now;
-long unsigned lastNTPtime;
-unsigned long lastEntryTime;
-
 // Define the neopixel instances
 Adafruit_NeoPixel stripClock(LEDCLOCK_COUNT, LEDCLOCK_PIN, NEO_RGB + NEO_KHZ800);
 Adafruit_NeoPixel stripDownlighter(LEDDOWNLIGHT_COUNT, LEDDOWNLIGHT_PIN, NEO_RGBW + NEO_KHZ800);
@@ -114,7 +111,7 @@ void setup() {
   Serial.println(""); 
   
   // Connect to wifi
-  WiFi.begin(ssid, password);		// This occours first as it take a couple of seconds, and the other stuff isnt as important
+  WiFi.begin(ssid, password);		// This occours first as it take a couple of seconds, and the other stuff isn't as important
   displayVersion(stripClock.Color(0,206,209),1000); 
   Serial.print("Connecting to SSID: ");
   Serial.println(ssid);
@@ -142,35 +139,36 @@ void setup() {
     delay(1000);
 	if (++WiFicounter > WiFicounter_max){
 		displayWifistatus(stripClock.Color(255,0,0));
-		Serial.println ( "Connection Failed. Restarting" );
+		Serial.println ( "Wifi Connection Failed. Restarting" );
 		ESP.restart();
 	} 
 	Serial.print('.');
   }
   displayWifistatus(stripClock.Color(0,255,0));
   delay(500);
-  Serial.println("\n WiFi Connection established!");  
+  Serial.print("\n WiFi Connection established!");  
 
   //Display IP
-  Serial.print("IP address:\t");
+  Serial.print("\n IP address:\t");
   Serial.println(WiFi.localIP());         // Send the IP address of the ESP8266 to the computer
   displayIP(stripClock.Color(0,255,0),500);
   // Format for 192.168.0.5 : IP 192 168 0 5
   
-  //Sync Time with NTP
-  displayNTPstatus(stripClock.Color(255,255,0));  //replace 0 with yellow
-  configTime(0, 0, NTP_SERVER);
-  setenv("TZ", TZ_INFO, 1);  
-  if (getNTPtime(10)) {  // wait up to 10sec to sync
-     displayNTPstatus(stripClock.Color(0,255,0));  //Green
-	// delay 1s
-	// display timezone on the clock for 2sec
-  } else {
-     displayNTPstatus(stripClock.Color(255,0,0));  //Red
-     Serial.println("\n NTP Server not reachable. Restarting.");
-     ESP.restart();
-  }
+  //Sync Time with NTP using ezTime libary
+  displayAny('N','T','P',0,1,1,stripClock.Color(255,255,0));
+  displayNTPstatus(stripClock.Color(255,255,0));
+  //setInterval(30); //NTP Sync interval is ~30 mins by default
+  setDebug(INFO);
+  waitForSync();
+  displayAny('S','Y','N','C',1,1,stripClock.Color(0,255,0));
+  delay(500);
   
+  Timezone myTZ;
+  myTZ.setLocation(TZ_INFO);
+  Serial.print(F("Local time:     "));
+  Serial.println(myTZ.dateTime());
+
+      
   // TESTS
   //counttest_1(stripClock.Color(0,0,255),1000);
   //counttest_4(stripClock.Color(255,0,0),250);
@@ -226,28 +224,17 @@ void displayVersion(int colourToUse, int wait){
 
 void displayWifistatus(uint32_t colourToUse){
     // Displays WiFI in the selected colour
-    stripClock.clear();
-    displayCharecter('W', digit[3], colourToUse);  
-    displayCharecter('I', digit[2], colourToUse);  
-    displayCharecter('F', digit[1], colourToUse);  
-    displayCharecter('I', digit[0], colourToUse);  
-    stripClock.show(); 
+    displayAny('W','i','F','i',1,1,colourToUse);
 }
 
 void displayNTPstatus(uint32_t colourToUse){
     // Displays NTP in the selected colour
-    stripClock.clear();
-    displayCharecter('N', digit[3], colourToUse);  
-    displayCharecter('T', digit[2], colourToUse);  
-    displayCharecter('P', digit[1], colourToUse);  
-    stripClock.show(); 
+    displayAny('N','T','P',0,1,1,colourToUse);
 }
 
 void displayIP(uint32_t colourToUse, int wait){
   // Displays the IP to the neopixel array
-  stripClock.clear();
-  displayCharecter('I', digit[2], colourToUse);
-  displayCharecter('P', digit[1], colourToUse);
+  displayAny(0,'I','P',0,1,1,colourToUse);
   delay(wait);
   displayLongNum(WiFi.localIP()[0], 0, 1, colourToUse);
   delay(wait);
@@ -259,25 +246,16 @@ void displayIP(uint32_t colourToUse, int wait){
   delay(wait);
 }
  
-
-bool getNTPtime(int sec) {
-  {
-    uint32_t start = millis();
-    do {
-      time(&now);
-      localtime_r(&now, &timeinfo);
-      Serial.print(".");
-      delay(10);
-    } while (((millis() - start) <= (1000 * sec)) && (timeinfo.tm_year < (2016 - 1900)));
-    if (timeinfo.tm_year <= (2016 - 1900)) return false;  // the NTP call was not successful
-    Serial.print("now ");  Serial.println(now);
-    char time_output[30];
-    strftime(time_output, 30, "%a  %d-%m-%y %T", localtime(&now));
-    Serial.println(time_output);
-    Serial.println();
-  }
-  return true;
+void displayAny (int A, int B, int C, int D, int clearall, int showall, uint32_t colourToUse)
+{
+  if (clearall) stripClock.clear();
+  displayCharecter(A, digit[3], colourToUse);    
+  displayCharecter(B, digit[2], colourToUse);  
+  displayCharecter(C, digit[1], colourToUse);  
+  displayCharecter(D, digit[0], colourToUse);    
+  if (showall) stripClock.show();
 }
+ 
 
 void displayLongNum (int num, int pad, int justification, uint32_t colourToUse){
    // Function to display any number from 0 to 9999
