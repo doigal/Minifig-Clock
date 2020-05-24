@@ -18,6 +18,12 @@ A modification of DIY Machines' Giant Hidden Shelf Edge Clock
  Link to original: https://github.com/DIY-Machines/DigitalClockSmartShelving
  
  L. Doig, May 2020
+
+ Required libaries
+
+ Adafruit's Neopixel        ?
+ ezTime                     https://github.com/ropg/ezTime
+
  
  To modify for yourself: 
     * Set the SSID and password in credentials
@@ -68,11 +74,13 @@ SPECIFIC TO DO:
 // Version
 #define VERSION_NUM        1
 
-// Time zone details
+// Time details/preferences
 // Provide official timezone names
 // https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
 const char* TZ_INFO    = "Australia/Melbourne";  
-
+const int twentyfourhr = 1; //1 for 24 hour, 0 for 12 hour
+Timezone myTZ;
+  
 // Which pin on the Arduino is connected to the NeoPixels?
 #define LEDCLOCK_PIN        D2
 #define LEDDOWNLIGHT_PIN    D5
@@ -163,12 +171,18 @@ void setup() {
   displayAny('S','Y','N','C',1,1,stripClock.Color(0,255,0));
   delay(500);
   
-  Timezone myTZ;
+
   myTZ.setLocation(TZ_INFO);
   Serial.print(F("Local time:     "));
   Serial.println(myTZ.dateTime());
 
-      
+  //Show the day, DDMM, Year
+  displayDDMY(1000,stripClock.Color(0,255,0));   
+  //Show the time
+  displayTime(twentyfourhr,stripClock.Color(0,255,0));
+
+  // Events for EZ Time
+  
   // TESTS
   //counttest_1(stripClock.Color(0,0,255),1000);
   //counttest_4(stripClock.Color(255,0,0),250);
@@ -180,6 +194,23 @@ void loop() {
   // Push the display values to the LEDs
   // Adjust the brightness
   // Display the LEDs
+
+  //Modes:
+  //  0     Clock, update every ~5seconds, pulse the colon
+  //  1     Day, date, month, year, back to clock
+  //  2     Temperature (sensor), display ~5seconds, back to clock
+  //  3     Temperature min (Blue) - max(red) - current(?) (From online)
+  //  4     Sunrise/sunset times from online
+  //  5     Number of unread emails
+  //  6     Number of notifications/followers/etc (TBD)
+
+  // on ntp sync flash Sync +/- MS out?
+
+
+  if (minuteChanged()) displayTime(twentyfourhr,stripClock.Color(0,255,0));
+
+  // Required for ezTime update with NTP Server
+  events();
   }
 
 // *** TESTING FUNCTIONS ***
@@ -245,6 +276,47 @@ void displayIP(uint32_t colourToUse, int wait){
   displayLongNum(WiFi.localIP()[3], 0, 1, colourToUse);
   delay(wait);
 }
+
+void displayDDMY (int wait, uint32_t colourToUse)
+{
+  String s_day = myTZ.dateTime("D");
+  String s_date = myTZ.dateTime("d");
+  String s_month = myTZ.dateTime("M");
+  String s_year = myTZ.dateTime("Y");
+  String s_TZ = myTZ.dateTime("T");
+
+  Serial.print("\n Day");
+  displayAny(0,s_day[0],s_day[1],s_day[2],1,1,colourToUse);
+  delay(wait);
+  
+  Serial.print("\n Date");
+  displayAny(0,s_date[0],s_date[1],0,1,1,colourToUse);
+  delay(wait);
+
+  Serial.print("\n Month");
+  displayAny(0,s_month[0],s_month[1],s_month[2],1,1,colourToUse);
+  delay(wait);
+  
+  Serial.print("\n Year");
+  displayAny(s_year[0],s_year[1],s_year[2],s_year[3],1,1,colourToUse);
+  delay(wait);
+
+  Serial.print("\n Timezone");
+  displayAny(s_TZ[0],s_TZ[1],s_TZ[2],s_TZ[3],1,1,colourToUse);
+  delay(wait);  
+}
+
+void displayTime (int twentyfourhr, uint32_t colourToUse)
+{
+  String s_time = "";
+  if (twentyfourhr) s_time = myTZ.dateTime("Gi");
+  else s_time = myTZ.dateTime("gi");
+
+  Serial.print("\n The time is : ");
+  Serial.print(s_time);
+  displayAny(s_time[0],s_time[1],s_time[2],s_time[3],1,1,colourToUse);
+}
+
  
 void displayAny (int A, int B, int C, int D, int clearall, int showall, uint32_t colourToUse)
 {
@@ -532,61 +604,3 @@ void displayCharecter(char charToDisplay, int offsetBy, uint32_t colourToUse){
      break;
   }
 }
-
-//void displayDay(int dayToDisplay, int colourToUse)
-//	stripClock.clear();
-//    switch (dayToDisplay){
-//		
-//	case 1:		//Mon
-//		displayCharecter(22, OFFS_FOUTH, colourToUse);  //m
-//		displayCharecter(24, OFFS_THIRD, colourToUse);  //o
-//		displayCharecter(23, OFFS_SECON, colourToUse);  //n
-//		stripClock.show();		
-//		break;
-//		
-//	case 2:		//Tue
-//		displayCharecter(29, OFFS_FOUTH, colourToUse);  //t
-//		displayCharecter(30, OFFS_THIRD, colourToUse);  //u
-//		displayCharecter(14, OFFS_SECON, colourToUse);  //e
-//		stripClock.show();		
-//		break;
-//
-//	case 3:		//Wen
-//		displayCharecter(32, OFFS_FOUTH, colourToUse);  //W
-//		displayCharecter(14, OFFS_THIRD, colourToUse);  //e
-//		displayCharecter(23, OFFS_SECON, colourToUse);  //n
-//		stripClock.show();		
-//		break;
-//		
-//	case 4:		//Thu
-//		displayCharecter(22, OFFS_FOUTH, colourToUse);  //t
-//		displayCharecter(24, OFFS_THIRD, colourToUse);  //h
-//		displayCharecter(23, OFFS_SECON, colourToUse);  //u
-//		stripClock.show();		
-//		break;
-//
-//	case 5:		//Fri
-//		displayCharecter(15, OFFS_FOUTH, colourToUse);  //f
-//		displayCharecter(27, OFFS_THIRD, colourToUse);  //r
-//		displayCharecter(24, OFFS_SECON, colourToUse);  //i
-//		stripClock.show();		
-//		break;
-//
-//	case 6:		//Sat
-//		displayCharecter(28, OFFS_FOUTH, colourToUse);  //s
-//		displayCharecter(10, OFFS_THIRD, colourToUse);  //a
-//		displayCharecter(29, OFFS_SECON, colourToUse);  //t
-//		stripClock.show();		
-//		break;
-//		
-//	case 7:		//Sun
-//		displayCharecter(28, OFFS_FOUTH, colourToUse);  //s
-//		displayCharecter(30, OFFS_THIRD, colourToUse);  //u
-//		displayCharecter(23, OFFS_SECON, colourToUse);  //n
-//		stripClock.show();		
-//		break;
-//
-//    default:
-//     break;
-//    }
-//}
