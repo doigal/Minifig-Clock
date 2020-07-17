@@ -34,13 +34,12 @@ A modification of DIY Machines' Giant Hidden Shelf Edge Clock
 
 /*
 SPECIFIC TO DO: 
- * Decimal place/colon pulse
+
  * Pulse the neopixels in the background for things like connecting to wifi etc (heartbeat stuff)
  * have a single digit display mode for testing
  * better use of matrix/array rather than brute force
  * Wifi manager - red wifi when down
  * better colour management - inc ability to loop through colour ranges
- * Brightness management via light sensor
  * Scrolling text ability
  * Serial Debug levels (Off/Info/Debug)
  * Wifi interface
@@ -48,8 +47,11 @@ SPECIFIC TO DO:
  * DONE Basic Serial debug
  * DONE switch to esp and online time
  * DONE A void that handles any number w left/center/right justify
- 
- REFERENCE
+ * DONE Decimal place/colon pulse
+ * DONE Brightness management via light sensor
+
+  
+REFERENCE
  * Colours: 
 	Red			    (255,   0, 0  )
 	Yellow		  (255, 255, 0  )
@@ -86,6 +88,9 @@ Timezone myTZ;
 #define LEDCLOCK_PIN        5
 #define LEDDOWNLIGHT_PIN    2
 
+// Which pin on the Arduino is connected to the push button?
+//#define BUTTON_PIN          2
+
 // How many NeoPixels are attached to the Arduino?
 #define LEDCLOCK_COUNT      114
 #define LEDDOWNLIGHT_COUNT  14
@@ -98,19 +103,21 @@ Timezone myTZ;
 const int digit[] = {0, 28, 56, 84};
 
 // Variables for brightness
+// If powering through USB, keep these values really low.
+// If powering through adaptor, keep max at ~200.
+// Min needs to be higher than 2.
 const int CF_Bright_min = 2;
 const int CF_Bright_max = 25;
 const int DL_Bright_min = 2;
 const int DL_Bright_max = 25;
-int CF_Bright = 5;
-int DL_Bright = 5;
+int CF_Bright = 5;               // initial brightness - keep low so can reprogram via USB
+int DL_Bright = 5;               // initial brightness - keep low so can reprogram via USB
 
-const int numReadings = 12;
+const int numReadings = 7;       // Size of averaging matrix
 int readings[numReadings];       // the readings from the analog input
 int readIndex = 0;               // the index of the current reading
 long total = 0;                  // the running total
 long average = 0;                // the average
-
 
 // Define the neopixel instances
 Adafruit_NeoPixel stripClock(LEDCLOCK_COUNT, LEDCLOCK_PIN, NEO_GRB + NEO_KHZ800);
@@ -132,8 +139,8 @@ void setup() {
   displayVersion(stripClock.Color(0,206,209),1000); 
   Serial.print("Connecting to SSID: ");
   Serial.println(ssid);
-  Serial.print("Using Key: ");
-  Serial.println(password);  
+  //Serial.print("Using Key: ");
+  //Serial.println(password);  
 
   // Init the clock LEDs
   stripClock.begin();                                 // INITIALIZE NeoPixel stripClock object (REQUIRED)
@@ -244,7 +251,7 @@ void loop() {
    } 
 
   // Pulse the colons
-  // pattern: full bright at ms = 000, off by 750ms
+  // Pattern: full bright at ms = 000, off by 750ms
   int colon_t = myTZ.dateTime("v").toInt();
   int colon_r = constrain(map(colon_t, 750, 0, 0, rgb_r),0,255);
   int colon_g = constrain(map(colon_t, 750, 0, 0, rgb_g),0,255);

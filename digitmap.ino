@@ -73,7 +73,6 @@ void digit_char_d(int offset, uint32_t colour){
 // FIX
 void digit_char_e(int offset, uint32_t colour){
     stripClock.fill(colour, (1*LED_SEGMENT + offset), 3*LED_SEGMENT);
-    stripClock.fill(colour, (4*LED_SEGMENT + offset), 1*LED_SEGMENT);    
     stripClock.fill(colour, (5*LED_SEGMENT + offset), 2*LED_SEGMENT);    
 }
 
