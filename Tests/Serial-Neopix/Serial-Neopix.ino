@@ -3,7 +3,7 @@
 #include <Adafruit_NeoPixel.h>
 
 // Which pin on the Arduino is connected to the NeoPixels?
-#define LEDCLOCK_PIN        6
+#define LEDCLOCK_PIN        5
 
 // How many NeoPixels are attached to the Arduino?
 #define LEDCLOCK_COUNT      28

@@ -69,7 +69,7 @@ SPECIFIC TO DO:
 	#include <WiFi.h>
 #endif
 
-//#include <Credentials.h> // Secret wifi detail stuff.
+//#include "Credentials.ino" // Secret wifi detail stuff.
 
 // Version
 #define VERSION_NUM        1
@@ -82,26 +82,27 @@ const int twentyfourhr = 1; //1 for 24 hour, 0 for 12 hour
 Timezone myTZ;
   
 // Which pin on the Arduino is connected to the NeoPixels?
-#define LEDCLOCK_PIN        D2
-#define LEDDOWNLIGHT_PIN    D5
+#define LEDCLOCK_PIN        5
+#define LEDDOWNLIGHT_PIN    2
 
 // How many NeoPixels are attached to the Arduino?
-#define LEDCLOCK_COUNT      28
-#define LEDDOWNLIGHT_COUNT  2
+#define LEDCLOCK_COUNT      114
+#define LEDDOWNLIGHT_COUNT  14
 
 // How many LEDs per segment?
 #define LED_SEGMENT         4
 
 // What is the number of the first LED in each digit?
-const int digit[] = {84, 56, 28, 0};
+//const int digit[] = {84, 56, 28, 0};
+const int digit[] = {0, 28, 56, 84};
 
 // Variables for brightness
-const int CF_Bright_min = 25;
-const int CF_Bright_max = 200;
-const int DL_Bright_min = 50;
-const int DL_Bright_max = 200;
-int CF_Bright = 50;
-int DL_Bright = 200;
+const int CF_Bright_min = 5;
+const int CF_Bright_max = 25;
+const int DL_Bright_min = 5;
+const int DL_Bright_max = 25;
+int CF_Bright = 25;
+int DL_Bright = 25;
 
 // Define the neopixel instances
 Adafruit_NeoPixel stripClock(LEDCLOCK_COUNT, LEDCLOCK_PIN, NEO_RGB + NEO_KHZ800);
@@ -123,6 +124,8 @@ void setup() {
   displayVersion(stripClock.Color(0,206,209),1000); 
   Serial.print("Connecting to SSID: ");
   Serial.println(ssid);
+  Serial.print("Using Key: ");
+  Serial.println(password);  
 
   // Init the clock LEDs
   stripClock.begin();                                 // INITIALIZE NeoPixel stripClock object (REQUIRED)
@@ -135,6 +138,10 @@ void setup() {
   stripDownlighter.clear();
   stripDownlighter.show();                            // Turn OFF all pixels ASAP
   stripDownlighter.setBrightness(DL_Bright);          // Set BRIGHTNESS (max = 255) 200~ 3/4 brightness
+
+  // Set the downlights on
+  downlighteron();
+  
   
   //Connecting to wifi status/watchdog
   int WiFicounter = 0;
@@ -153,7 +160,7 @@ void setup() {
 	Serial.print('.');
   }
   displayWifistatus(stripClock.Color(0,255,0));
-  delay(500);
+  delay(5000);
   Serial.print("\n WiFi Connection established!");  
 
   //Display IP
@@ -169,7 +176,7 @@ void setup() {
   setDebug(INFO);
   waitForSync();
   displayAny('S','Y','N','C',1,1,stripClock.Color(0,255,0));
-  delay(500);
+  delay(5000);
   
 
   myTZ.setLocation(TZ_INFO);
@@ -181,11 +188,12 @@ void setup() {
   //Show the time
   displayTime(twentyfourhr,stripClock.Color(0,255,0));
 
-  // Events for EZ Time
-  
+  //delay(5000);
+
+
   // TESTS
-  //counttest_1(stripClock.Color(0,0,255),1000);
-  //counttest_4(stripClock.Color(255,0,0),250);
+  // counttest_1(stripClock.Color(0,0,255),1000);
+  // counttest_4(stripClock.Color(255,0,0),250);
   
 }
 
@@ -206,11 +214,14 @@ void loop() {
 
   // on ntp sync flash Sync +/- MS out?
 
-
+  // Code for updating the time on display
   if (minuteChanged()) displayTime(twentyfourhr,stripClock.Color(0,255,0));
 
   // Required for ezTime update with NTP Server
   events();
+
+  // Downlights on
+  downlighteron();
   }
 
 // *** TESTING FUNCTIONS ***
@@ -239,9 +250,17 @@ void counttest_1(uint32_t colourToUse, int wait){
 // Test that cycles through all numbers from 0 to 9999
 void counttest_4(uint32_t colourToUse, int wait){
   for(int i=0; i<10000; i++) {                                      //  For every possible number in the array
-	  displayLongNum(i,digit[3],2,colourToUse);
+	  displayLongNum(i,1,2,colourToUse);
     delay(wait);                                                    //  Pause for a moment
   }  
+}
+
+// *** DOWNLIGHT CONTROL ***
+void downlighteron() {
+  for(int i=0; i<=LEDDOWNLIGHT_COUNT; i++) {     
+    stripDownlighter.setPixelColor(i, 50, 50, 50, 255);
+  } 
+  stripDownlighter.show();
 }
 
 // *** STANDARD DISPLAYS ***
@@ -432,11 +451,12 @@ void displayLongNum (int num, int pad, int justification, uint32_t colourToUse){
 
    // Output to LED array
    // +48 is a dirty dirty hack, do not feed this letters.
-   displayCharecter(digit4+48,1,colourToUse);
-   displayCharecter(digit3+48,2,colourToUse);
-   displayCharecter(digit2+48,3,colourToUse);
-   displayCharecter(digit1+48,4,colourToUse);
+   displayCharecter(digit4+48,digit[3],colourToUse);
+   displayCharecter(digit3+48,digit[2],colourToUse);
+   displayCharecter(digit2+48,digit[1],colourToUse);
+   displayCharecter(digit1+48,digit[0],colourToUse);
    stripClock.show(); 
+
    
 }
 
