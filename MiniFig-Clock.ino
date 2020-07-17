@@ -34,20 +34,21 @@ A modification of DIY Machines' Giant Hidden Shelf Edge Clock
 
 /*
 SPECIFIC TO DO: 
- * Decimal place
+ * Decimal place/colon pulse
  * Pulse the neopixels in the background for things like connecting to wifi etc (heartbeat stuff)
- * switch to esp and online time
  * have a single digit display mode for testing
  * better use of matrix/array rather than brute force
  * Wifi manager - red wifi when down
  * better colour management - inc ability to loop through colour ranges
  * Brightness management via light sensor
  * Scrolling text ability
+ * Serial Debug levels (Off/Info/Debug)
  * Wifi interface
  * PART DONE Have a more readable char to display map. Ideal is ASCII, with case inconsistent ability 
- * PART DONE Serial debug 
+ * DONE Basic Serial debug
+ * DONE switch to esp and online time
  * DONE A void that handles any number w left/center/right justify
-
+ 
  REFERENCE
  * Colours: 
 	Red			    (255,   0, 0  )
@@ -72,7 +73,7 @@ SPECIFIC TO DO:
 //#include "Credentials.ino" // Secret wifi detail stuff.
 
 // Version
-#define VERSION_NUM        1
+#define VERSION_NUM        2
 
 // Time details/preferences
 // Provide official timezone names
@@ -97,16 +98,23 @@ Timezone myTZ;
 const int digit[] = {0, 28, 56, 84};
 
 // Variables for brightness
-const int CF_Bright_min = 5;
+const int CF_Bright_min = 2;
 const int CF_Bright_max = 25;
-const int DL_Bright_min = 5;
+const int DL_Bright_min = 2;
 const int DL_Bright_max = 25;
-int CF_Bright = 25;
-int DL_Bright = 25;
+int CF_Bright = 5;
+int DL_Bright = 5;
+
+const int numReadings = 12;
+int readings[numReadings];       // the readings from the analog input
+int readIndex = 0;               // the index of the current reading
+long total = 0;                  // the running total
+long average = 0;                // the average
+
 
 // Define the neopixel instances
-Adafruit_NeoPixel stripClock(LEDCLOCK_COUNT, LEDCLOCK_PIN, NEO_RGB + NEO_KHZ800);
-Adafruit_NeoPixel stripDownlighter(LEDDOWNLIGHT_COUNT, LEDDOWNLIGHT_PIN, NEO_RGBW + NEO_KHZ800);
+Adafruit_NeoPixel stripClock(LEDCLOCK_COUNT, LEDCLOCK_PIN, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoPixel stripDownlighter(LEDDOWNLIGHT_COUNT, LEDDOWNLIGHT_PIN, NEO_GRBW + NEO_KHZ800);
 
 // VOID SETUP
 void setup() {
@@ -140,8 +148,7 @@ void setup() {
   stripDownlighter.setBrightness(DL_Bright);          // Set BRIGHTNESS (max = 255) 200~ 3/4 brightness
 
   // Set the downlights on
-  downlighteron();
-  
+  downlighteron();  
   
   //Connecting to wifi status/watchdog
   int WiFicounter = 0;
@@ -160,7 +167,7 @@ void setup() {
 	Serial.print('.');
   }
   displayWifistatus(stripClock.Color(0,255,0));
-  delay(5000);
+  delay(1000);
   Serial.print("\n WiFi Connection established!");  
 
   //Display IP
@@ -176,7 +183,7 @@ void setup() {
   setDebug(INFO);
   waitForSync();
   displayAny('S','Y','N','C',1,1,stripClock.Color(0,255,0));
-  delay(5000);
+  delay(2500);
   
 
   myTZ.setLocation(TZ_INFO);
@@ -184,9 +191,16 @@ void setup() {
   Serial.println(myTZ.dateTime());
 
   //Show the day, DDMM, Year
-  displayDDMY(1000,stripClock.Color(0,255,0));   
+  displayDDMY(2500,stripClock.Color(0,255,0));   
   //Show the time
   displayTime(twentyfourhr,stripClock.Color(0,255,0));
+
+  // Smoothing brightness array
+  // initialize all the readings to 0:
+  for (int thisReading = 0; thisReading < numReadings; thisReading++) {
+    readings[thisReading] = 0;
+  }
+
 
   //delay(5000);
 
@@ -213,15 +227,38 @@ void loop() {
   //  6     Number of notifications/followers/etc (TBD)
 
   // on ntp sync flash Sync +/- MS out?
-
+  
   // Code for updating the time on display
-  if (minuteChanged()) displayTime(twentyfourhr,stripClock.Color(0,255,0));
+
+  int rgb_r = 0;
+  int rgb_g = 255;
+  int rgb_b = 0;
+  
+  if (minuteChanged()) displayTime(twentyfourhr,stripClock.Color(rgb_r,rgb_g,rgb_b));
+  
+  // Brightness adjust based on LDR reading. Only done every 5 secs to be smooth
+  if (secondChanged()){
+    if (myTZ.dateTime("s").toInt() % 5 == 0){
+      brightnessAdj();
+    }
+   } 
+
+  // Pulse the colons
+  // pattern: full bright at ms = 000, off by 750ms
+  int colon_t = myTZ.dateTime("v").toInt();
+  int colon_r = constrain(map(colon_t, 750, 0, 0, rgb_r),0,255);
+  int colon_g = constrain(map(colon_t, 750, 0, 0, rgb_g),0,255);
+  int colon_b = constrain(map(colon_t, 750, 0, 0, rgb_b),0,255);
+  stripClock.setPixelColor(113, stripClock.Color(colon_r,colon_g,colon_b));
+  stripClock.setPixelColor(112, stripClock.Color(colon_r,colon_g,colon_b));
+  stripClock.show();
 
   // Required for ezTime update with NTP Server
   events();
 
   // Downlights on
-  downlighteron();
+  //downlighteron();
+  
   }
 
 // *** TESTING FUNCTIONS ***
@@ -255,10 +292,54 @@ void counttest_4(uint32_t colourToUse, int wait){
   }  
 }
 
+// *** BRIGHTNESS CONTROL ***
+
+void brightnessAdj() {
+    
+    //  Record a reading from the light sensor and add it to the array
+    readings[readIndex] = analogRead(A0); //get an average light level from previouse set of samples
+    Serial.print("Light sensor value added to array = ");
+    Serial.println(readings[readIndex]);
+    readIndex = readIndex + 1; // advance to the next position in the array:
+
+    // if we're at the end of the array move the index back around...
+    if (readIndex >= numReadings) {
+      // ...wrap around to the beginning:
+      readIndex = 0;
+    }
+    
+    // now work out the sum of all the values in the array
+    int sumBrightness = 0;
+    for (int i=0; i < numReadings; i++)
+      {
+          sumBrightness += readings[i];
+      }
+    //Serial.print("Sum of the brightness array = ");
+    //Serial.println(sumBrightness);
+
+    // and calculate the average: 
+    int lightSensorValue = sumBrightness / numReadings;
+    //Serial.print("Average light sensor value = ");
+    //Serial.println(lightSensorValue);    
+
+    //set the brightness based on ambiant light levels
+    CF_Bright = map(lightSensorValue, 1, 1000, CF_Bright_min, CF_Bright_max); 
+    DL_Bright = map(lightSensorValue, 1, 1000, DL_Bright_min, DL_Bright_max); 
+    stripClock.setBrightness(CF_Bright);         // Set brightness value of the LEDs
+    stripDownlighter.setBrightness(DL_Bright);   // Set brightness value of the LEDs
+    Serial.print("Mapped brightness Clock / Down Light value = ");
+    Serial.print(CF_Bright);
+    Serial.print(" / ");
+    Serial.println(DL_Bright);
+    
+    stripClock.show();
+    stripDownlighter.show();
+}
+
 // *** DOWNLIGHT CONTROL ***
 void downlighteron() {
   for(int i=0; i<=LEDDOWNLIGHT_COUNT; i++) {     
-    stripDownlighter.setPixelColor(i, 50, 50, 50, 255);
+    stripDownlighter.setPixelColor(i, 125, 125, 125, 255);
   } 
   stripDownlighter.show();
 }
