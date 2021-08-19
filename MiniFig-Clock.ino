@@ -35,7 +35,7 @@ A modification of DIY Machines' Giant Hidden Shelf Edge Clock
 
 /*
 SPECIFIC TO DO: 
- * Move the current pulser into a subroutine, takes colour as input
+ * Move the current pulser into a subroutine, takes color as input
  * Open Weather Map updater
  * Pulse the neopixels in the background for things like connecting to wifi etc (heartbeat stuff)
  * Wifi manager - red wifi when down
@@ -46,16 +46,33 @@ SPECIFIC TO DO:
  * Wifi interface for mode/freetext/etc
  * Shift digit mapping to proper byte matrix
  * Colour mapping for temperatures/UV/etc
+ * MQTT or similar input, including format check and how to handle message (eg persistant or go back to clock)
+ * Effects/colour fades
+ * HTML Interface for:
+	Clock Colour
+	Downlight Colour
+	Brightness settings and current calculation
+	Mode select
+	Auto Mode config
+	Free Text input
+	Enable test modes - Pulse all pixels through RGBW, count all digits 0-9/a-z, etc
+	Wifi config
+	MQTT setup, config and listener (so can recieve messages)
+	OTA
+	Statusing - Wifi strenght, config, NTP sync drift, etc
+	
  * Modes 
- *        0   Clock, update every minute, pulse the colon
- *        1   Day, date, month, year, back to clock
- *        2   Temperature (sensor), display ~5seconds, back to clock
- *        3   Temperature min (Blue) - max(red) - current(?) (From online or HA)
- *        4   Sunrise/sunset times (From online or HA)
- *        5   Number of unread emails
- *        6   Number of notifications/followers/etc (TBD)
- *		  7	  Free text via MQTT or HA
+ *          Clock, update every minute, pulse the colon
+ *          Day, date, month, year, back to clock
+ *          Temperature (sensor), display ~5seconds, back to clock
+ *          Temperature min (Blue) - max(red) - current(?) (From online or HA)
+ *          Sunrise/sunset times (From online or HA)
+ *          Number of unread emails
+ *          Number of notifications/followers/etc (TBD)
+ *		    Free text via MQTT or HA
  * 
+ *			DEFAULT MODE: Clock, Curr temp on the 15, Full weather, date, sun on the hour. <100 days to xmas starts countdown every 10 mins
+ *
  * PART DONE better use of matrix/array rather than brute force
  * PART DONE Have a more readable char to display map. Ideal is ASCII, with case inconsistent ability 
  * DONE Basic Serial debug
@@ -67,11 +84,18 @@ SPECIFIC TO DO:
   
 REFERENCE
  * Colours: 
-	Red			    (255,   0, 0  )
-	Yellow		  (255, 255, 0  )
-	Blue		    (0  ,   0, 255)
+	DarkViolet  (148,   0, 211)
+	Blue		(0  ,   0, 255)
 	Light Blue	(173, 216, 230)
-	Green		    (0  , 255, 0)
+	Green		(0  , 255, 0  )
+	Light Green (144, 238, 144)
+	Yellow		(255, 255, 0  )
+	Orange		(255, 165, 0  )
+	Red			(255,   0, 0  )
+	FireBrick 	(178,  34,  34)
+	Purple		(128,   0, 128)
+	
+	
 */
 
 
@@ -124,10 +148,12 @@ const int displaywait = 1500;
 // If powering through adapter, keep max at ~200.
 // Min needs to be higher than 2.
 // FUTURE: Work out a current estimate and limit that way.
-const int CF_Bright_min = 10;
-const int CF_Bright_max = 75;
-const int DL_Bright_min = 10;
-const int DL_Bright_max = 175;
+const int CF_Bright_min = 5;
+const int CF_Bright_max = 100;
+const int DL_Bright_min = 5;
+const int DL_Bright_max = 150;
+int Bright_Night_start = 23;	 // Night time is quiet time to save power & LED life
+int Bright_Night_end = 7;		 // Night time is quiet time to save power & LED life
 int CF_Bright = 5;               // initial brightness - keep low so can reprogram via USB
 int DL_Bright = 5;               // initial brightness - keep low so can reprogram via USB
 
@@ -136,6 +162,13 @@ int readings[numReadings];       // the readings from the analog input
 int readIndex = 0;               // the index of the current reading
 long total = 0;                  // the running total
 long average = 0;                // the average
+
+// Variables for config in minutes
+		// HOW TO HANDLE TOP OF THE HOUR???
+int Interv_CountDown = 30;
+int Interv_Date = 30;
+int Interv_CurrTemp = 15;
+
 
 // Weather Variables
 // FUTURE: Consider shifting all to HA data.
@@ -253,7 +286,13 @@ void setup() {
   // counttest_1(stripClock.Color(0,0,255),1000);
   // counttest_4(stripClock.Color(255,0,0),250);
 
-  //owm_weatherupdate();
+  owm_weatherupdate();
+  //displaytemp(owm_tempcurr, tempCol(owm_tempcurr));
+  display_curr_weather_all(stripClock.Color(128,128,128));
+  
+  delay(displaywait);
+  displayTime(twentyfourhr,stripClock.Color(0, 0, 255));
+
 }
 
 void loop() {
@@ -263,29 +302,51 @@ void loop() {
   int rgb_b = 255;
 
    
-  // Days to XMAS mode
+  
   if (minuteChanged()){
-     //Colons off
-     colonoff();
+    int min = myTZ.dateTime("i").toInt();	 
 
-     // XMAS is day 360 of the year 20hell (2020/2021)
-     int delta = 357 - myTZ.dateTime("z").toInt();
-     displayLongNum(delta, 0, 1, stripClock.Color(255,0,0));
-     delay(displaywait);
-     displayAny('D','A','Y','S',1,1,stripClock.Color(0,255,0));
-     delay(displaywait);
-     displayAny('T','I','L',0,1,1,stripClock.Color(255,0,0));
-     delay(displaywait);
-     displayAny('X','M','A','S',1,1,stripClock.Color(0,255,0));
+    // Date
+	if (min % Interv_Date == 0 || min == 0){
+		displayDDMY(displaywait,stripClock.Color(rgb_r, rgb_g, rgb_b));   
+	}
+	
+	// Curr Temp
+	if (min % Interv_CurrTemp == 0){
+		owm_weatherupdate();
+		displaytemp(owm_tempcurr, tempCol(owm_tempcurr));
+		delay(displaywait);
+	}
 
-     //Flash the downlights green-red in alternating pattern
-     int A[7] = {0, 2, 4, 6, 8, 10, 12}; // 0 2 4 6 8 10 12
-     int B[7] = {1, 3, 5, 7, 9, 11, 13}; // 1 3 5 7 9 11 13
+	// Full Weather
+    if ( min == 0){
+		
+	}
+	
+	// Days to XMAS mode  
+	if (min % Interv_CountDown == 0 || min == 0){
+			
+		//Colons off
+		colonoff();
+	
+		// XMAS is day 360 of the year 20hell (2020/2021)
+		int delta = 357 - myTZ.dateTime("z").toInt();
+		displayLongNum(delta, 0, 1, stripClock.Color(255,0,0));
+		delay(displaywait);
+		displayAny('D','A','Y','S',1,1,stripClock.Color(0,255,0));
+		delay(displaywait);
+		displayAny('T','I','L',0,1,1,stripClock.Color(255,0,0));
+		delay(displaywait);
+		displayAny('X','M','A','S',1,1,stripClock.Color(0,255,0));
+
+		//Flash the downlights green-red in alternating pattern
+		int A[7] = {0, 2, 4, 6, 8, 10, 12}; // 0 2 4 6 8 10 12
+		int B[7] = {1, 3, 5, 7, 9, 11, 13}; // 1 3 5 7 9 11 13
      
-     for(int i=0; i<=4; i++) {     
-        for(int j=0; j<=6; j++){
-           stripDownlighter.setPixelColor(A[j], 255, 0, 0, 0);
-           stripDownlighter.setPixelColor(B[j], 0, 255, 0, 0);
+		for(int i=0; i<=4; i++) {     
+			for(int j=0; j<=6; j++){
+				stripDownlighter.setPixelColor(A[j], 255, 0, 0, 0);
+				stripDownlighter.setPixelColor(B[j], 0, 255, 0, 0);
         }
         
         stripDownlighter.show();
@@ -294,19 +355,24 @@ void loop() {
         for(int j=0; j<=6; j++){
            stripDownlighter.setPixelColor(A[j], 0, 255, 0, 0);
            stripDownlighter.setPixelColor(B[j], 255, 0, 0, 0);
-        
         }
+
         stripDownlighter.show();
         delay(displaywait/3);
         
         }
-       
-     downlighteron();
-     
+		downlighteron();
+	}
+
+
+
 
      // Normal time display
      displayTime(twentyfourhr,stripClock.Color(rgb_r, rgb_g, rgb_b));
-     
+     Serial.print("\n Brightness Clock-Downs: ");
+	 Serial.print(CF_Bright);
+	 Serial.print(" - ");
+	 Serial.print(DL_Bright);
   }
 
   // Brightness adjust based on LDR reading. Only done every 2 secs to be smooth
@@ -447,9 +513,17 @@ void brightnessAdj() {
     //Serial.println(lightSensorValue);    
 
     //set the brightness based on ambiant light levels
-    CF_Bright = map(lightSensorValue, 1, 1000, CF_Bright_min, CF_Bright_max); 
-    DL_Bright = map(lightSensorValue, 1, 1000, DL_Bright_min, DL_Bright_max); 
-    stripClock.setBrightness(CF_Bright);         // Set brightness value of the LEDs
+    CF_Bright = constrain(map(lightSensorValue, 1, 750, CF_Bright_min, CF_Bright_max), CF_Bright_min, CF_Bright_max); 
+    DL_Bright = constrain(map(lightSensorValue, 1, 750, DL_Bright_min, DL_Bright_max), DL_Bright_min, DL_Bright_max); 
+    
+	// Night time is not bright time
+	int hour = myTZ.dateTime("H").toInt();
+	if (hour < Bright_Night_end || hour > Bright_Night_start) {
+		CF_Bright = CF_Bright_min;
+		DL_Bright = DL_Bright_min;
+	}
+	
+	stripClock.setBrightness(CF_Bright);         // Set brightness value of the LEDs
     stripDownlighter.setBrightness(DL_Bright);   // Set brightness value of the LEDs
     
 //    Serial.print("Mapped brightness Clock / Down Light value = ");
@@ -690,9 +764,7 @@ int daycountdown(int target){
   int delta = target - CurrDate;
   Serial.print("Days to go : ");
   Serial.println(delta);
-  
-
-  
+   
 }
 
 
@@ -805,7 +877,7 @@ void owm_weatherupdate(){
   Serial.print("Sun Set local:   "); Serial.println(sunsetstr);
   Serial.println("*****************************************************");
 
-  displaytemp(owm_tempcurr, stripClock.Color(255,0,0));
+  //displaytemp(owm_tempcurr, stripClock.Color(255,0,0));
   
 }
 
@@ -813,27 +885,38 @@ void display_curr_weather_all(uint32_t colourToUse){
 
   // Current Temperature according to OWM, in degC
   displayAny('T','C','U','R',1,1,colourToUse);
-  delay(displaywait/2);
-  displaytemp(owm_tempcurr, colourToUse);
   delay(displaywait);
+  displaytemp(owm_tempcurr, tempCol(owm_tempcurr));
+  delay(displaywait*2);
 
   // 'Feels Like' Temperature according to OWM, in degC
   displayAny('F','E','E','L',1,1,colourToUse);
-  delay(displaywait/2);
-  displaytemp(owm_tempfeel, colourToUse);
   delay(displaywait);
+  displaytemp(owm_tempfeel, tempCol(owm_tempfeel));
+  delay(displaywait*2);
 
-  // Current Humidity according to OWM, in %
-  displayAny('H','U','M','D',1,1,colourToUse);
-  delay(displaywait/2);
-  owm_humidity; // and percent
+  //
+  displayAny('M','A','X',0,1,1,colourToUse);
   delay(displaywait);
-
-  // Current Pressure according to OWM, in ?
-  displayAny('P','R','E','S',1,1,colourToUse);
-  delay(displaywait/2);
-  owm_pressure;
+  displaytemp(owm_tempMax, tempCol(owm_tempMax));
+  delay(displaywait*2);
+  
+  displayAny('M','I','N',0,1,1,colourToUse);
   delay(displaywait);
+  displaytemp(owm_tempMin, tempCol(owm_tempMin));
+  delay(displaywait*2);
+  
+ //// Current Humidity according to OWM, in %
+ //displayAny('H','U','M','D',1,1,colourToUse);
+ //delay(displaywait/2);
+ //owm_humidity; // and percent
+ //delay(displaywait);
+ //
+ //// Current Pressure according to OWM, in ?
+ //displayAny('P','R','E','S',1,1,colourToUse);
+ //delay(displaywait/2);
+ //owm_pressure;
+ //delay(displaywait);
 
   // Current UV Index according to OWM
   displayAny('U','V',' ','I',1,1,colourToUse);
@@ -859,13 +942,29 @@ void display_curr_weather_all(uint32_t colourToUse){
   }
   delay(displaywait);
 
-  displayAny('C','L','D','S',1,1,colourToUse);
-  delay(displaywait/2);
-  owm_clouds; // and percent
-  delay(displaywait);
+  //displayAny('C','L','D','S',1,1,colourToUse);
+  //delay(displaywait/2);
+  //owm_clouds; // and percent
+  //delay(displaywait);
 
  
 }
+
+
+uint32_t tempCol(int temp){
+	if (temp < 0 ){ return stripClock.Color(148,  0,211); }                         // DarkViolet  for < 0
+	else if ((temp < 5) && (temp >= 0)){return stripClock.Color(0,0,255); }		// Blue 	   for 0-4
+    else if ((temp < 10) && (temp >= 5)){return stripClock.Color(173,216,230); }	// Light Blue  for 5-9
+	else if ((temp < 15) && (temp >= 10)){return stripClock.Color(0,255,0); }	// Green 	   for 10-14
+	else if ((temp < 20) && (temp >= 15)){return stripClock.Color(144,238,144); }	// Light Green for 15-19
+	else if ((temp < 25) && (temp >= 20)){return stripClock.Color(255,255,0); }	// Yellow 	 for 20-24
+	else if ((temp < 30) && (temp >= 25)){return stripClock.Color(0,255,0); }	// Yellow 	 for 25-29
+	else if ((temp < 35) && (temp >= 30)){return stripClock.Color(255,165,0); }	// Orange 	 for 30-35
+	else if ((temp < 40) && (temp >= 35)){return stripClock.Color(255,0,0); }	// Red 	 for 35-40
+	else if ((temp < 45) && (temp >= 40)){return stripClock.Color(178,34,34); }	// FireBrick 	 for 40-44
+	else if ((temp < 45)){return stripClock.Color(128,0,128); }					// Purple 	 for 45+
+	}
+
 
 
 void displaytemp(int tempdisplay, uint32_t colourToUse){
@@ -875,13 +974,13 @@ void displaytemp(int tempdisplay, uint32_t colourToUse){
   displayLongNum(tempdisplay, 0, 0, colourToUse);
   displayCharecter(176, digit[1], colourToUse);  
   displayCharecter('C', digit[0], colourToUse);    
-  
+  stripClock.show(); 
 }
 
 
 
 void displayCharecter(char charToDisplay, int offsetBy, uint32_t colourToUse){
-  // Function to take a ASCII charecter and call the required display function
+  // Function to take a ASCII character and call the required display function
   // The input must be any number, letter (regardless of case), +, -, deg etc.
   // PREF: That its a string.
   // Can pick which digit it goes to via offsetBy, and the 32bit colour
